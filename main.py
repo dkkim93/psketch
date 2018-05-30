@@ -6,14 +6,12 @@ import worlds
 import configs
 import logging
 import os
-import random
 import sys
 import traceback
 import yaml
 import shutil
-import numpy as np
-import tensorflow as tf
 from misc.util import Struct
+
 
 def main():
     config = configure()
@@ -21,6 +19,7 @@ def main():
     model = models.load(config)
     trainer = trainers.load(config)
     trainer.train(model, world)
+
 
 def configure():
     # Load config
@@ -36,7 +35,8 @@ def configure():
 
     # Set up logging
     log_name = os.path.join(config.experiment_dir, "run.log")
-    logging.basicConfig(filename=log_name, level=logging.DEBUG,
+    logging.basicConfig(
+            filename=log_name, level=logging.DEBUG,
             format='%(asctime)s %(levelname)-8s %(message)s')
 
     def handler(type, value, tb):
@@ -48,6 +48,7 @@ def configure():
     logging.info(str(config))
 
     return config
+
 
 if __name__ == "__main__":
     main()
