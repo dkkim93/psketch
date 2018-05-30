@@ -1,29 +1,23 @@
-from misc import util
 import net
-
-from collections import namedtuple, defaultdict
 import logging
-import numpy as np
 import os
+import numpy as np
 import tensorflow as tf
 from tensorflow.python.framework.ops import IndexedSlicesValue
+from collections import namedtuple, defaultdict
 
 N_UPDATE = 2000
 N_BATCH = 2000
-
 N_HIDDEN = 128
 N_EMBED = 64
-
 DISCOUNT = 0.9
 
-ActorModule = namedtuple("ActorModule", ["t_probs", "t_chosen_prob", "params",
-        "t_decrement_op"])
+ActorModule = namedtuple("ActorModule", ["t_probs", "t_chosen_prob", "params", "t_decrement_op"])
 CriticModule = namedtuple("CriticModule", ["t_value", "params"])
 Trainer = namedtuple("Trainer", ["t_loss", "t_grad", "t_train_op"])
-InputBundle = namedtuple("InputBundle", ["t_arg", "t_step", "t_feats", 
-        "t_action_mask", "t_reward"])
-
+InputBundle = namedtuple("InputBundle", ["t_arg", "t_step", "t_feats", "t_action_mask", "t_reward"])
 ModelState = namedtuple("ModelState", ["action", "arg", "remaining", "task", "step"])
+
 
 def increment_sparse_or_dense(into, increment):
     assert isinstance(into, np.ndarray)
@@ -32,6 +26,7 @@ def increment_sparse_or_dense(into, increment):
             into[increment.indices[i], :] += increment.values[i, :]
     else:
         into += increment
+
 
 class ModularACModel(object):
     def __init__(self, config):
@@ -42,7 +37,7 @@ class ModularACModel(object):
         self.config = config
 
     def prepare(self, world, trainer):
-        assert self.world is None
+        assert self.world is None  # Should be initialized as None
         self.world = world
         self.trainer = trainer
 
@@ -54,10 +49,9 @@ class ModularACModel(object):
         else:
             self.n_features = world.n_features
 
-        self.n_actions = world.n_actions + 1
+        self.n_actions = world.n_actions + 1  # + 1 for the stop action
         self.t_n_steps = tf.Variable(1., name="n_steps")
         self.t_inc_steps = self.t_n_steps.assign(self.t_n_steps + 1)
-        # TODO configurable optimizer
         self.optimizer = tf.train.RMSPropOptimizer(0.001)
 
         def build_actor(index, t_input, t_action_mask, extra_params=[]):
@@ -70,42 +64,50 @@ class ModularACModel(object):
                 t_decrement_op = v_bias[-1].assign(v_bias[-1] - 3)
 
                 t_action_logprobs = tf.nn.log_softmax(t_action_score)
-                t_chosen_prob = tf.reduce_sum(t_action_mask * t_action_logprobs, 
-                        reduction_indices=(1,))
+                t_chosen_prob = tf.reduce_sum(
+                    t_action_mask * t_action_logprobs,
+                    reduction_indices=(1,))
 
-            return ActorModule(t_action_logprobs, t_chosen_prob, 
-                    v_action+extra_params, t_decrement_op)
+            return ActorModule(
+                    t_action_logprobs, t_chosen_prob,
+                    v_action + extra_params, t_decrement_op)
 
         def build_critic(index, t_input, t_reward, extra_params=[]):
             with tf.variable_scope("critic_%s" % index):
                 if self.config.model.baseline in ("task", "common"):
-                    t_value = tf.get_variable("b", shape=(),
-                            initializer=tf.constant_initializer(0.0))
+                    t_value = tf.get_variable(
+                        "b", shape=(), initializer=tf.constant_initializer(0.0))
                     v_value = [t_value]
                 elif self.config.model.baseline == "state":
                     t_value, v_value = net.mlp(t_input, (1,))
                     t_value = tf.squeeze(t_value)
                 else:
                     raise NotImplementedError(
-                            "Baseline %s is not implemented" % self.config.model.baseline)
+                        "Baseline %s is not implemented" % self.config.model.baseline)
+
             return CriticModule(t_value, v_value + extra_params)
 
         def build_actor_trainer(actor, critic, t_reward):
             t_advantage = t_reward - critic.t_value
-            # TODO configurable entropy regularizer
-            actor_loss = -tf.reduce_sum(actor.t_chosen_prob * t_advantage) + \
-                    0.001 * tf.reduce_sum(tf.exp(actor.t_probs) * actor.t_probs)
+            # NOTE second term for entropy regularizer
+            actor_loss = \
+                -tf.reduce_sum(actor.t_chosen_prob * t_advantage) + \
+                0.001 * tf.reduce_sum(tf.exp(actor.t_probs) * actor.t_probs)
             actor_grad = tf.gradients(actor_loss, actor.params)
-            actor_trainer = Trainer(actor_loss, actor_grad, 
-                    self.optimizer.minimize(actor_loss, var_list=actor.params))
+            actor_trainer = Trainer(
+                actor_loss, actor_grad,
+                self.optimizer.minimize(actor_loss, var_list=actor.params))
+
             return actor_trainer
 
         def build_critic_trainer(t_reward, critic):
             t_advantage = t_reward - critic.t_value
             critic_loss = tf.reduce_sum(tf.square(t_advantage))
             critic_grad = tf.gradients(critic_loss, critic.params)
-            critic_trainer = Trainer(critic_loss, critic_grad,
-                    self.optimizer.minimize(critic_loss, var_list=critic.params))
+            critic_trainer = Trainer(
+                critic_loss, critic_grad,
+                self.optimizer.minimize(critic_loss, var_list=critic.params))
+
             return critic_trainer
 
         # placeholders
@@ -116,8 +118,9 @@ class ModularACModel(object):
         t_reward = tf.placeholder(tf.float32, shape=(None,))
 
         if self.config.model.use_args:
-            t_embed, v_embed = net.embed(t_arg, len(trainer.cookbook.index),
-                    N_EMBED)
+            t_embed, v_embed = net.embed(
+                t_arg, len(trainer.cookbook.index),
+                N_EMBED)
             xp = v_embed
             t_input = tf.concat(1, (t_embed, t_feats))
         else:
@@ -129,6 +132,7 @@ class ModularACModel(object):
         critics = {}
         critic_trainers = {}
 
+        # Create actor, critic for each module
         if self.config.model.featurize_plan:
             actor = build_actor(0, t_input, t_action_mask, extra_params=xp)
             for i_module in range(self.n_modules):
@@ -146,7 +150,7 @@ class ModularACModel(object):
             else:
                 critic = build_critic(i_task, t_input, t_reward, extra_params=xp)
             for i_module in range(self.n_modules):
-                critics[i_task, i_module] = critic
+                critics[i_task, i_module] = critic  # NOTE one critic per task
 
         for i_module in range(self.n_modules):
             for i_task in range(self.n_tasks):
@@ -198,8 +202,9 @@ class ModularACModel(object):
             self.next_actor_seed += 1
 
     def save(self):
-        self.saver.save(self.session, 
-                os.path.join(self.config.experiment_dir, "modular_ac.chk"))
+        self.saver.save(
+            self.session,
+            os.path.join(self.config.experiment_dir, "modular_ac.chk"))
 
     def load(self):
         path = os.path.join(self.config.experiment_dir, "modular_ac.chk")
@@ -272,8 +277,8 @@ class ModularACModel(object):
                 out.append(ModelState(None, None, None, None, [0.]))
             else:
                 out.append(ModelState(
-                        self.subtasks[i][self.i_subtask[i]], 
-                        self.args[i][self.i_subtask[i]], 
+                        self.subtasks[i][self.i_subtask[i]],
+                        self.args[i][self.i_subtask[i]],
                         len(self.args) - self.i_subtask[i],
                         self.i_task[i],
                         self.i_step[i].copy()))
@@ -311,11 +316,10 @@ class ModularACModel(object):
 
             all_exps = by_mod[i_task, i_mod1]
             for i_batch in range(int(np.ceil(1. * len(all_exps) / N_BATCH))):
-                exps = all_exps[i_batch * N_BATCH : (i_batch + 1) * N_BATCH]
+                exps = all_exps[i_batch * N_BATCH: (i_batch + 1) * N_BATCH]
                 s1, m1, a, s2, m2, r = zip(*exps)
                 feats1 = [self.featurize(s, m) for s, m in zip(s1, m1)]
                 args1 = [m.arg for m in m1]
-                steps1 = [m.step for m in m1]
                 a_mask = np.zeros((len(exps), self.n_actions))
                 for i_datum, aa in enumerate(a):
                     a_mask[i_datum, aa] = 1

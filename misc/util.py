@@ -1,5 +1,6 @@
 import re
 
+
 class Struct:
     def __init__(self, **entries):
         rec_entries = {}
@@ -35,6 +36,7 @@ class Struct:
     def __repr__(self):
         return "Struct(%r)" % self.__dict__
 
+
 class Index:
     def __init__(self):
         self.contents = dict()
@@ -66,6 +68,7 @@ class Index:
 
     def __iter__(self):
         return iter(self.ordered_contents)
+
 
 def flatten(lol):
     if isinstance(lol, tuple) or isinstance(lol, list):

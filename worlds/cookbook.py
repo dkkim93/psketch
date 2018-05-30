@@ -1,14 +1,14 @@
-from misc.util import Struct, Index
-
-import copy
 import numpy as np
 import yaml
+from misc.util import Index
+
 
 class Cookbook(object):
     def __init__(self, recipes_path):
         with open(recipes_path) as recipes_f:
             recipes = yaml.load(recipes_f)
-        #self.environment = set(recipes["environment"])
+
+        # Convert each "kind" into unique index
         self.index = Index()
         self.environment = set(self.index.index(e) for e in recipes["environment"])
         self.primitives = set(self.index.index(p) for p in recipes["primitives"])
@@ -22,7 +22,6 @@ class Cookbook(object):
                 else:
                     d[self.index.index(inp)] = count
             self.recipes[self.index.index(output)] = d
-        kinds = self.environment | self.primitives | set(self.recipes.keys())
         self.n_kinds = len(self.index)
 
     def primitives_for(self, goal):

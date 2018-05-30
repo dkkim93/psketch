@@ -1,26 +1,24 @@
-from cookbook import Cookbook
-from misc import array
 
 import curses
 import logging
 import numpy as np
-from skimage.measure import block_reduce
 import time
+from misc import array
+from cookbook import Cookbook
+from skimage.measure import block_reduce
 
 WIDTH = 10
 HEIGHT = 10
-
 WINDOW_WIDTH = 5
 WINDOW_HEIGHT = 5
-
 N_WORKSHOPS = 3
-
 DOWN = 0
 UP = 1
 LEFT = 2
 RIGHT = 3
 USE = 4
 N_ACTIONS = USE + 1
+
 
 def random_free(grid, random):
     pos = None
@@ -30,6 +28,7 @@ def random_free(grid, random):
             continue
         pos = (x, y)
     return pos
+
 
 def neighbors(pos, dir=None):
     x, y = pos
@@ -44,21 +43,24 @@ def neighbors(pos, dir=None):
         neighbors.append((x, y+1))
     return neighbors
 
+
 class CraftWorld(object):
     def __init__(self, config):
         self.cookbook = Cookbook(config.recipes)
         self.n_features = \
-                2 * WINDOW_WIDTH * WINDOW_HEIGHT * self.cookbook.n_kinds + \
-                self.cookbook.n_kinds + \
-                4 + \
-                1
+            2 * WINDOW_WIDTH * WINDOW_HEIGHT * self.cookbook.n_kinds + \
+            self.cookbook.n_kinds + \
+            4 + \
+            1
         self.n_actions = N_ACTIONS
 
         self.non_grabbable_indices = self.cookbook.environment
-        self.grabbable_indices = [i for i in range(self.cookbook.n_kinds)
-                if i not in self.non_grabbable_indices]
-        self.workshop_indices = [self.cookbook.index["workshop%d" % i]
-                for i in range(N_WORKSHOPS)]
+        self.grabbable_indices = [
+            i for i in range(self.cookbook.n_kinds)
+            if i not in self.non_grabbable_indices]
+        self.workshop_indices = [
+            self.cookbook.index["workshop%d" % i]
+            for i in range(N_WORKSHOPS)]
         self.water_index = self.cookbook.index["water"]
         self.stone_index = self.cookbook.index["stone"]
 
