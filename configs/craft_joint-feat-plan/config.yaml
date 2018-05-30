@@ -1,0 +1,18 @@
+# Config for craft_joint-feat-plan
+name: 'craft_joint-feat-plan'
+recipes: 'resources/craft/recipes.yaml'
+world:
+    name: 'CraftWorld'
+model:
+    baseline: 'state'
+    use_args: False
+    name: 'ModularACModel'
+    max_subtask_timesteps: 15
+    featurize_plan: True
+experiment_dir: 'experiments/craft_joint-feat-plan'
+trainer:
+    improvement_threshold: 0.8
+    use_curriculum: True
+    name: 'CurriculumTrainer'
+    max_timesteps: 100
+    hints: 'resources/craft/hints.yaml'

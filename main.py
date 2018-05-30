@@ -3,12 +3,14 @@
 import models
 import trainers
 import worlds
+import configs
 import logging
 import os
 import random
 import sys
 import traceback
 import yaml
+import shutil
 import numpy as np
 import tensorflow as tf
 from misc.util import Struct
@@ -24,13 +26,13 @@ def configure():
     # Load config
     with open("config.yaml") as config_f:
         config = Struct(**yaml.load(config_f))
+    config = configs.load(config)
 
     # Set up experiment
-    try:
-        config.experiment_dir = os.path.join("experiments/%s" % config.name)
+    config.experiment_dir = os.path.join("experiments/%s" % config.name)
+    shutil.rmtree(config.experiment_dir)
+    if not os.path.exists(config.experiment_dir):
         os.mkdir(config.experiment_dir)
-    except:
-        raise IOError("Experiment %s already exists!" % config.experiment_dir)
 
     # Set up logging
     log_name = os.path.join(config.experiment_dir, "run.log")
