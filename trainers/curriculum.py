@@ -1,23 +1,21 @@
-from misc import util
-from misc.experience import Transition
-from worlds.cookbook import Cookbook
-
-from collections import defaultdict, namedtuple
-import itertools
 import logging
 import numpy as np
 import yaml
+from misc import util
+from misc.experience import Transition
+from worlds.cookbook import Cookbook
+from collections import defaultdict, namedtuple
 
 N_ITERS = 3000000
 N_UPDATE = 500
 N_BATCH = 100
 IMPROVEMENT_THRESHOLD = 0.8
-
 Task = namedtuple("Task", ["goal", "steps"])
+
 
 class CurriculumTrainer(object):
     def __init__(self, config):
-        # load configs
+        # Load configs
         self.config = config
         self.cookbook = Cookbook(config.recipes)
         self.subtask_index = util.Index()
@@ -25,19 +23,20 @@ class CurriculumTrainer(object):
         with open(config.trainer.hints) as hints_f:
             self.hints = yaml.load(hints_f)
 
-        # initialize randomness
+        # Initialize randomness
         self.random = np.random.RandomState(0)
 
-        # organize task and subtask indices
+        # Organize task and subtask indices
         self.tasks_by_subtask = defaultdict(list)
         self.tasks = []
         for hint_key, hint in self.hints.items():
             goal = util.parse_fexp(hint_key)
-            goal = (self.subtask_index.index(goal[0]), self.cookbook.index[goal[1]])
+            goal = (self.subtask_index.index(goal[0]),
+                    self.cookbook.index[goal[1]])  # Convert to index
             if config.model.use_args:
                 steps = [util.parse_fexp(s) for s in hint]
-                steps = [(self.subtask_index.index(a), self.cookbook.index[b])
-                        for a, b in steps]
+                steps = [(self.subtask_index.index(a),
+                          self.cookbook.index[b]) for a, b in steps]
                 steps = tuple(steps)
                 task = Task(goal, steps)
                 for subtask, _ in steps:
@@ -57,13 +56,14 @@ class CurriculumTrainer(object):
         goal_names = []
         goal_args = []
 
-        # choose tasks and initialize model
+        # Choose tasks and initialize model
         for _ in range(N_BATCH):
             task = possible_tasks[self.random.choice(
                 len(possible_tasks), p=task_probs)]
             goal, _ = task
             goal_name, goal_arg = goal
             scenario = world.sample_scenario_with_goal(goal_arg)
+
             states_before.append(scenario.init())
             tasks.append(task)
             goal_names.append(goal_name)
@@ -76,11 +76,12 @@ class CurriculumTrainer(object):
         timer = self.config.trainer.max_timesteps
         done = [False for _ in range(N_BATCH)]
 
-        # act!
+        # Act
         while not all(done) and timer > 0:
             mstates_before = model.get_state()
             action, terminate = model.act(states_before)
             mstates_after = model.get_state()
+
             states_after = [None for _ in range(N_BATCH)]
             for i in range(N_BATCH):
                 if action[i] is None:
@@ -97,26 +98,21 @@ class CurriculumTrainer(object):
 
                 if not done[i]:
                     transitions[i].append(Transition(
-                            states_before[i], mstates_before[i], action[i], 
+                            states_before[i], mstates_before[i], action[i],
                             states_after[i], mstates_after[i], reward))
                     total_reward += reward
 
                 if terminate[i]:
                     done[i] = True
 
-            states_before = states_after
+            states_before = states_after  # states_before update
             timer -= 1
 
         return transitions, total_reward / N_BATCH
 
     def train(self, model, world):
-        model.prepare(world, self)
-        #model.load()
-        subtasks = self.tasks_by_subtask.keys()
-        if self.config.trainer.use_curriculum:
-            max_steps = 1
-        else:
-            max_steps = 100
+        model.prepare(world, self)  # Initialize networks
+        max_steps = 1 if self.config.trainer.use_curriculum else 100
         i_iter = 0
 
         task_probs = []
@@ -124,15 +120,15 @@ class CurriculumTrainer(object):
             logging.info("[max steps] %d", max_steps)
             min_reward = np.inf
 
-            # TODO refactor
             for _ in range(1):
-                # make sure there's something of this length
+                # If curriculum learning is used, then max_steps is used to
+                # ensure starting from tasks that have short sketches
                 possible_tasks = self.tasks
                 possible_tasks = [t for t in possible_tasks if len(t.steps) <= max_steps]
                 if len(possible_tasks) == 0:
                     continue
 
-                # re-initialize task probs if necessary
+                # Re-initialize task probs if necessary
                 if len(task_probs) != len(possible_tasks):
                     task_probs = np.ones(len(possible_tasks)) / len(possible_tasks)
 
@@ -141,13 +137,15 @@ class CurriculumTrainer(object):
                 count = 0.
                 task_rewards = defaultdict(lambda: 0)
                 task_counts = defaultdict(lambda: 0)
+
+                # Get enough samples for one training step
                 for j in range(N_UPDATE):
                     err = None
-                    # get enough samples for one training step
                     while err is None:
+                        # Compute rollout experience for 
                         i_iter += N_BATCH
-                        transitions, reward = self.do_rollout(model, world, 
-                                possible_tasks, task_probs)
+                        transitions, reward = self.do_rollout(
+                            model, world, possible_tasks, task_probs)
                         for t in transitions:
                             tr = sum(tt.r for tt in t)
                             task_rewards[t[0].m1.task] += tr
@@ -156,20 +154,21 @@ class CurriculumTrainer(object):
                         count += 1
                         for t in transitions:
                             model.experience(t)
-                        err = model.train()
+                        err = model.train()  # NOTE train is performed here
                     total_err += err
 
-                # log
+                # Log
                 logging.info("[step] %d", i_iter)
                 scores = []
                 for i, task in enumerate(possible_tasks):
                     i_task = self.task_index[task]
                     score = 1. * task_rewards[i_task] / task_counts[i_task]
-                    logging.info("[task] %s[%s] %s %s", 
-                            self.subtask_index.get(task.goal[0]),
-                            self.cookbook.index.get(task.goal[1]),
-                            task_probs[i],
-                            score)
+                    logging.info(
+                        "[task] %s[%s] %s %s",
+                        self.subtask_index.get(task.goal[0]),
+                        self.cookbook.index.get(task.goal[1]),
+                        task_probs[i],
+                        score)
                     scores.append(score)
                 logging.info("")
                 logging.info("[rollout0] %s", [t.a for t in transitions[0]])

@@ -1,4 +1,3 @@
-
 import curses
 import logging
 import numpy as np
@@ -68,10 +67,13 @@ class CraftWorld(object):
 
     def sample_scenario_with_goal(self, goal):
         assert goal not in self.cookbook.environment
+
         if goal in self.cookbook.primitives:
             make_island = goal == self.cookbook.index["gold"]
             make_cave = goal == self.cookbook.index["gem"]
-            return self.sample_scenario({goal: 1}, make_island=make_island,
+            return self.sample_scenario(
+                    {goal: 1},
+                    make_island=make_island,
                     make_cave=make_cave)
         elif goal in self.cookbook.recipes:
             ingredients = self.cookbook.primitives_for(goal)
@@ -80,7 +82,7 @@ class CraftWorld(object):
             assert False, "don't know how to build a scenario for %s" % goal
 
     def sample_scenario(self, ingredients, make_island=False, make_cave=False):
-        # generate grid
+        # Generate grid
         grid = np.zeros((WIDTH, HEIGHT, self.cookbook.n_kinds))
         i_bd = self.cookbook.index["boundary"]
         grid[0, :, i_bd] = 1
@@ -92,9 +94,9 @@ class CraftWorld(object):
         if make_island or make_cave:
             (gx, gy) = (1 + np.random.randint(WIDTH-2), 1)
             treasure_index = \
-                    self.cookbook.index["gold"] if make_island else self.cookbook.index["gem"]
+                self.cookbook.index["gold"] if make_island else self.cookbook.index["gem"]
             wall_index = \
-                    self.water_index if make_island else self.stone_index
+                self.water_index if make_island else self.stone_index
             grid[gx, gy, treasure_index] = 1
             for i in range(-1, 2):
                 for j in range(-1, 2):
@@ -164,6 +166,7 @@ class CraftWorld(object):
                 time.sleep(1)
         curses.wrapper(_visualize)
 
+
 class CraftScenario(object):
     def __init__(self, grid, init_pos, world):
         self.init_grid = grid
@@ -175,6 +178,7 @@ class CraftScenario(object):
         inventory = np.zeros(self.world.cookbook.n_kinds)
         state = CraftState(self, self.init_grid, self.init_pos, self.init_dir, inventory)
         return state
+
 
 class CraftState(object):
     def __init__(self, scenario, grid, pos, dir, inventory):
@@ -197,13 +201,13 @@ class CraftState(object):
             bhw = (WINDOW_WIDTH * WINDOW_WIDTH) / 2
             bhh = (WINDOW_HEIGHT * WINDOW_HEIGHT) / 2
 
-            grid_feats = array.pad_slice(self.grid, (x-hw, x+hw+1), 
-                    (y-hh, y+hh+1))
-            grid_feats_big = array.pad_slice(self.grid, (x-bhw, x+bhw+1),
-                    (y-bhh, y+bhh+1))
-            grid_feats_big_red = block_reduce(grid_feats_big,
-                    (WINDOW_WIDTH, WINDOW_HEIGHT, 1), func=np.max)
-            #grid_feats_big_red = np.zeros((WINDOW_WIDTH, WINDOW_HEIGHT, self.world.cookbook.n_kinds))
+            grid_feats = array.pad_slice(
+                self.grid, (x-hw, x+hw+1), (y-hh, y+hh+1))
+            grid_feats_big = array.pad_slice(
+                self.grid, (x-bhw, x+bhw+1),  (y-bhh, y+bhh+1))
+            grid_feats_big_red = block_reduce(
+                grid_feats_big, (WINDOW_WIDTH, WINDOW_HEIGHT, 1), func=np.max)
+            # grid_feats_big_red = np.zeros((WINDOW_WIDTH, WINDOW_HEIGHT, self.world.cookbook.n_kinds))
 
             self.gf = grid_feats.transpose((2, 0, 1))
             self.gfb = grid_feats_big_red.transpose((2, 0, 1))
@@ -215,9 +219,12 @@ class CraftState(object):
             dir_features = np.zeros(4)
             dir_features[self.dir] = 1
 
-            features = np.concatenate((grid_feats.ravel(),
-                    grid_feats_big_red.ravel(), self.inventory, 
-                    dir_features, [0]))
+            features = np.concatenate((
+                grid_feats.ravel(),
+                grid_feats_big_red.ravel(),
+                self.inventory,
+                dir_features,
+                [0]))
             assert len(features) == self.world.n_features
             self._cached_features = features
 
@@ -245,7 +252,7 @@ class CraftState(object):
             dx, dy = (1, 0)
             n_dir = RIGHT
 
-        # use actions
+        # Use actions
         elif action == USE:
             cookbook = self.world.cookbook
             dx, dy = (0, 0)
@@ -308,6 +315,7 @@ class CraftState(object):
         else:
             raise Exception("Unexpected action: %s" % action)
 
+        # For new state
         n_x = x + dx
         n_y = y + dy
         if self.grid[n_x, n_y, :].any():

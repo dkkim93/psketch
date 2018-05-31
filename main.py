@@ -7,9 +7,9 @@ import configs
 import logging
 import os
 import sys
+import glob
 import traceback
 import yaml
-import shutil
 from misc.util import Struct
 
 
@@ -29,9 +29,11 @@ def configure():
 
     # Set up experiment
     config.experiment_dir = os.path.join("experiments/%s" % config.name)
-    shutil.rmtree(config.experiment_dir)
     if not os.path.exists(config.experiment_dir):
         os.mkdir(config.experiment_dir)
+    files = glob.glob(os.path.join(config.experiment_dir, "*"))
+    for f in files:
+        os.remove(f)
 
     # Set up logging
     log_name = os.path.join(config.experiment_dir, "run.log")

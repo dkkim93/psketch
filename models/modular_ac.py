@@ -214,7 +214,7 @@ class ModularACModel(object):
     def experience(self, episode):
         running_reward = 0
         for transition in episode[::-1]:
-            running_reward = running_reward * DISCOUNT + transition.r
+            running_reward = transition.r + running_reward * DISCOUNT
             n_transition = transition._replace(r=running_reward)
             if n_transition.a < self.n_actions:
                 self.experiences.append(n_transition)
@@ -289,6 +289,7 @@ class ModularACModel(object):
             experiences = self.experiences
         else:
             experiences = [e for e in self.experiences if e.m1.action == action]
+
         if len(experiences) < N_UPDATE:
             return None
         batch = experiences[:N_UPDATE]
@@ -332,10 +333,13 @@ class ModularACModel(object):
                 if self.config.model.use_args:
                     feed_dict[self.inputs.t_arg] = args1
 
-                actor_grad, actor_err = self.session.run([actor_trainer.t_grad, actor_trainer.t_loss],
-                        feed_dict=feed_dict)
-                critic_grad, critic_err = self.session.run([critic_trainer.t_grad, critic_trainer.t_loss], 
-                        feed_dict=feed_dict)
+                # Train actor
+                actor_grad, actor_err = self.session.run(
+                    [actor_trainer.t_grad, actor_trainer.t_loss], feed_dict=feed_dict)
+
+                # Train critic
+                critic_grad, critic_err = self.session.run(
+                    [critic_trainer.t_grad, critic_trainer.t_loss], feed_dict=feed_dict)
 
                 total_actor_err += actor_err
                 total_critic_err += critic_err

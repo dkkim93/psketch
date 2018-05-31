@@ -1,0 +1,18 @@
+# Config for craft_modular_state-baseline
+name: 'craft_modular_state-baseline'
+recipes: 'resources/craft/recipes.yaml'
+world:
+    name: 'CraftWorld'
+model:
+    name: 'ModularACModel'
+    baseline: 'state'
+    use_args: False
+    max_subtask_timesteps: 15
+    featurize_plan: False
+experiment_dir: 'experiments/craft_modular_state-baseline'
+trainer:
+    name: 'CurriculumTrainer'
+    use_curriculum: True
+    improvement_threshold: 0.8
+    max_timesteps: 100
+    hints: 'resources/craft/hints.yaml'
